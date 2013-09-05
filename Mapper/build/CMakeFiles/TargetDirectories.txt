@@ -1,0 +1,2 @@
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/build/src/CMakeFiles/mapper.dir
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/build/src/net/CMakeFiles/socketstream.dir

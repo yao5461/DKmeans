@@ -1,0 +1,11 @@
+Distribute K-Means 
+=================
+Try to implement a distribute K-Means.
+The first idea is to implement it by using MapReduce base Hadoop.
+The second idea is to use C/S model base socket communication.
+This project is for the second idea.
+
+Detail in this project:
+I try to implement K-Means in distribute way. A simply solution is to create several calculate processes and one main process. The main process is responsible for sending message and data to calculate process and receive the result. All calculate processes are the same except for the port number. It is similiar with C/S(I think so). I think it is a solution. I will change this if there are something wrong.
+
+Author: yao 

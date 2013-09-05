@@ -1,0 +1,1 @@
+/usr/bin/c++   -O3 -DNDEBUG    CMakeFiles/mapper.dir/main.cpp.o  -o mapper -rdynamic 

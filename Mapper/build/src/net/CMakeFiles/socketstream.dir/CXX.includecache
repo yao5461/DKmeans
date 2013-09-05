@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/src/net/Socket.cpp
+Socket.h
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/src/net/Socket.h
+cstdlib
+-
+sys/types.h
+-
+sys/socket.h
+-
+netdb.h
+-
+arpa/inet.h
+-
+unistd.h
+-
+iostream
+-
+
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/src/net/Socket.h
+string
+-
+../ClassException.hpp
+/home/hadoop/Documents/machinelearning/localcode/DKMeans/Mapper/src/net/../ClassException.hpp
+winsock.h
+-
+netinet/in.h
+-
+

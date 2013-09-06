@@ -11,3 +11,5 @@
 2013-09-06 23:40 Yao Liu <xunayao0111@gmail.com>
 -Fix some error in CMakeLists.txt
 
+2013-09-06 23:50 Yao Liu <xunyao0111@gmail.com>
+-Create another project as server application

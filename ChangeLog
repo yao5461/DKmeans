@@ -8,4 +8,6 @@
 -Add functions in class Mapper
  Class mapper has not been finished
 
+2013-09-06 23:40 Yao Liu <xunayao0111@gmail.com>
+-Fix some error in CMakeLists.txt
 

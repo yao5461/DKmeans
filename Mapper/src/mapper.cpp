@@ -8,7 +8,7 @@ Mapper::~Mapper() {
 
 }
 
-Mapper::Mapper(string host, int port) {
+Mapper::Mapper(const string& host, unsigned short port) {
   this->m_myHost = host;
   this->m_myPort = port;
 }
@@ -59,7 +59,7 @@ bool Mapper::runTask() {
     
 }
 
-bool Mapper::establishConnect(const string& foreignAddress, short unsigned int foreignPort) {
+bool Mapper::establishConnect(const string& foreignAddress, unsigned short foreignPort) {
     bool flag = true;
   
     try{ 	     

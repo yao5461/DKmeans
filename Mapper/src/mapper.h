@@ -65,15 +65,15 @@ private:
 private:
     //socket information
     string m_myHost;
-    int m_myPort;
+    unsigned short m_myPort;
     
     //socket object
     SocketStream<TCPSocket> *m_ptrSocket;
     
     //data structure used while calculating
-    map<int, vector<double>> m_avgCentroid;	//store the new centroids of each cluster(a part of centroid information)
+    map<int, vector<double> > m_avgCentroid;	//store the new centroids of each cluster(a part of centroid information)
     map<int, int> m_numOfCluster;        	//store the number of points in each cluster 
-    map<int, vector<double>> m_centroids;	//centroids from server
+    map<int, vector<double> > m_centroids;	//centroids from server
   
 };
 

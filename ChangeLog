@@ -18,3 +18,10 @@
 -Add Class Controller. 
  A one-Server/Multiple-Clients structure has been finished.
  Next to design for K-Means and commands between server and clients. 
+
+2013-09-07 22:25 Yao Liu <xuanyao0111@gmail.com>
+-Modify the Class Controller
+ Add functions, mutex among threads.
+ Define status of main thread and client threads.
+ Define the state transition. 
+ The frame of this project(c/s system) seems to have been done.

@@ -9,6 +9,13 @@
 using namespace net;
 using namespace std;
 
+//define the status of process
+#define NOP	0
+#define WAIT	1
+#define END	2
+#define INIT	3
+#define CAL	4
+
 class Controller {
 
 public:
@@ -44,7 +51,36 @@ private:
      */
     bool waitAllClients();
     
+    /**
+     * Whether all clients are the special status
+     * @param tartgetStatus	
+     * @return true---all clients are in this status  false---are not
+     */
+    bool isAllClientsStatus(int tartgetStatus);
+    
+    /**
+     * Whether the task can be stoped. 
+     * When the change of controids less than throld, the task can be stoped.
+     */
+    bool canStopTask();
+    
+    /**
+     * The entry function of client thread
+     */
     static void *clientThread(void *arg);
+    
+    /**
+     * Send basic information to client which is belongs to this thread before doing classification.
+     * such dimension of data, number of cluster...
+     */
+    static bool sendBasicInfoToClient();
+    
+    /**
+     * Ask client to classify the data in its area.
+     * Receive the result from client which is been combined.
+     * The result is not the classification information. It is the new centroids information
+     */
+    static void askClientClassifyData();
     
 private:
     //server information
@@ -62,8 +98,15 @@ private:
     int m_numOfCluster;
     int m_lenOfData;
     
-    //the current status of the
-    int m_currStatus;
+    //the current status of the main process
+    int m_currMainThreadStatus;
+    //the current status of the client processes
+    int *m_currClientThreadsStatus;
+    
+    //mutex 
+    pthread_mutex_t m_mainStatusMutex;
+    pthread_mutex_t m_clientStatusMutex;
+    pthread_mutex_t m_updateMutex;
 };
 
 #endif // CONTROLLER_H

@@ -97,16 +97,6 @@ private:
     int m_dataDimension;
     int m_numOfCluster;
     int m_lenOfData;
-    
-    //the current status of the main process
-    int m_currMainThreadStatus;
-    //the current status of the client processes
-    int *m_currClientThreadsStatus;
-    
-    //mutex 
-    pthread_mutex_t m_mainStatusMutex;
-    pthread_mutex_t m_clientStatusMutex;
-    pthread_mutex_t m_updateMutex;
 };
 
 #endif // CONTROLLER_H

@@ -1,5 +1,16 @@
 #include "controller.h"
 
+//define global variable
+//store the status indormation of main thread and client threads
+int m_currMainThreadStatus;
+int* m_currClientThreadsStatus;
+
+//mutex variable
+pthread_mutex_t m_mainStatusMutex;
+pthread_mutex_t m_clientStatusMutex;
+pthread_mutex_t m_updateMutex;
+
+
 Controller::Controller() {
     this->init();
 }
@@ -24,16 +35,16 @@ void Controller::init() {
     this->m_numOfMapper = 3;
     
     //init the init status of each thread
-    this->m_currMainThreadStatus = NOP;
-    this->m_currClientThreadsStatus = new int[this->m_numOfMapper];
+    m_currMainThreadStatus = NOP;
+    m_currClientThreadsStatus = new int[this->m_numOfMapper];
     for(int i = 0; i < this->m_numOfMapper; i++) {
-	this->m_currClientThreadsStatus[i] = NOP;
+	m_currClientThreadsStatus[i] = NOP;
     }
     
     //init mutex
-    pthread_mutex_init(&(this->m_mainStatusMutex), NULL);
-    pthread_mutex_init(&(this->m_clientStatusMutex), NULL);
-    pthread_mutex_init(&(this->m_updateMutex), NULL);
+    pthread_mutex_init(&(m_mainStatusMutex), NULL);
+    pthread_mutex_init(&(m_clientStatusMutex), NULL);
+    pthread_mutex_init(&(m_updateMutex), NULL);
 }
 
 bool Controller::runTask() {
@@ -59,26 +70,26 @@ bool Controller::runTask() {
     while(working) {
 	int status;
 	//get my status
-	pthread_mutex_lock(&(this->m_mainStatusMutex));
-	status = this->m_currMainThreadStatus;
-	pthread_mutex_unlock(&(this->m_mainStatusMutex));
+	pthread_mutex_lock(&(m_mainStatusMutex));
+	status = m_currMainThreadStatus;
+	pthread_mutex_unlock(&(m_mainStatusMutex));
 
-	pthread_mutex_lock(&(this->m_mainStatusMutex));	
+	pthread_mutex_lock(&(m_mainStatusMutex));	
 	switch(status) {
 	  case NOP:
 	    if(this->isAllClientsStatus(INIT)) {
-		this->m_currMainThreadStatus = INIT;
+		m_currMainThreadStatus = INIT;
 	    }
 	    break;
 	  case INIT:
 	    if(this->isAllClientsStatus(WAIT)) {
-		this->m_currMainThreadStatus = CAL;
+		m_currMainThreadStatus = CAL;
 	    }
 	    break;
 	  case CAL:
 	    if(this->isAllClientsStatus(WAIT)) {
 		if(this->canStopTask()) {
-		    this->m_currMainThreadStatus = END;
+		    m_currMainThreadStatus = END;
 		}
 	    }
 	    break;
@@ -88,21 +99,21 @@ bool Controller::runTask() {
 	  default:
 	    break;
 	}
-	pthread_mutex_unlock(&(this->m_mainStatusMutex));
+	pthread_mutex_unlock(&(m_mainStatusMutex));
     }
 }
 
 bool Controller::isAllClientsStatus(int tartgetStatus) {
     bool flag = true;
     
-    pthread_mutex_lock(&(this->m_clientStatusMutex));
+    pthread_mutex_lock(&(m_clientStatusMutex));
     for(int i = 0; i < this->m_numOfMapper; i++) {
-	if(this->m_currClientThreadsStatus[i] != tartgetStatus) {
+	if(m_currClientThreadsStatus[i] != tartgetStatus) {
 	    flag = false;
 	    break;
 	}
     }
-    pthread_mutex_unlock(&(this->m_clientStatusMutex));
+    pthread_mutex_unlock(&(m_clientStatusMutex));
     
     return flag;
 }
@@ -158,10 +169,10 @@ void* Controller::clientThread(void* arg) {
     cout<<"Thread :"<<clientPort<<endl;
         
     //init this client thread status chage status into INIT
-    int index = clientPort - this->m_myPort - 1;
-    pthread_mutex_lock(&(this->m_clientStatusMutex));
-    this->m_currClientThreadsStatus[index] = INIT;
-    pthread_mutex_unlock(&(this->m_clientStatusMutex));
+    int index = (clientPort % 10) - 1;
+    pthread_mutex_lock(&(m_clientStatusMutex));
+    m_currClientThreadsStatus[index] = INIT;
+    pthread_mutex_unlock(&(m_clientStatusMutex));
     
     //init flag
     bool working = true;
@@ -171,12 +182,12 @@ void* Controller::clientThread(void* arg) {
     while(working) {
 	
 	//get current status of process
-	pthread_mutex_lock(&(this->m_mainStatusMutex));
-	status = this->m_currMainThreadStatus;
-	pthread_mutex_unlock(&(this->m_mainStatusMutex));
+	pthread_mutex_lock(&(m_mainStatusMutex));
+	status = m_currMainThreadStatus;
+	pthread_mutex_unlock(&(m_mainStatusMutex));
         
 	//change client thread status or communicate with client according main thread status
-	pthread_mutex_lock(&(this->m_currClientThreadsStatus));
+	pthread_mutex_lock(&(m_clientStatusMutex));
 	
 	switch(status) {
 	  case WAIT:
@@ -187,11 +198,11 @@ void* Controller::clientThread(void* arg) {
 	    break;
 	  case INIT:
 	    //send init information to client.
-	    this->sendBasicInfoToClient();
+	    sendBasicInfoToClient();
 	    break;
 	  case CAL:
 	    //ask client to classify the data.
-	    this->askClientClassifyData();
+	    askClientClassifyData();
 	    break;
 	  case NOP:
 	    //There is no status in main thread. Client thread do nothing.
@@ -200,7 +211,7 @@ void* Controller::clientThread(void* arg) {
 	    break;
 	}
 	
-	pthread_mutex_unlock(&(this->m_currClientThreadsStatus));
+	pthread_mutex_unlock(&(m_clientStatusMutex));
     }
 }
 

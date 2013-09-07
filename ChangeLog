@@ -25,3 +25,7 @@
  Define status of main thread and client threads.
  Define the state transition. 
  The frame of this project(c/s system) seems to have been done.
+
+2013-09-07 23:05 Yao Liu <xuanyao0111@gmail.com>
+-Fix the error
+ Some variables must be defined in global not local variables

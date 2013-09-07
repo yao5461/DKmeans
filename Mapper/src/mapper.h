@@ -4,6 +4,7 @@
 #include "net/SocketStream.hpp"
 #include "net/Socket.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <vector>
@@ -68,7 +69,8 @@ private:
     unsigned short m_myPort;
     
     //socket object
-    SocketStream<TCPSocket> *m_ptrSocket;
+    //SocketStream<TCPSocket> *m_ptrSocket;
+    TCPSocket *m_ptrSocket;
     
     //data structure used while calculating
     map<int, vector<double> > m_avgCentroid;	//store the new centroids of each cluster(a part of centroid information)

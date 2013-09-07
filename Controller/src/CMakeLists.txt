@@ -2,9 +2,9 @@ SET(AGENT_SOURCE_DIR "${CMAKE_SOURCE_DIR}/src")
 
 ADD_SUBDIRECTORY( net )
 
-ADD_EXECUTABLE(controller  main.cpp)
+ADD_EXECUTABLE(controller controller.cpp  main.cpp)
 
-TARGET_LINK_LIBRARIES(controller net)
+TARGET_LINK_LIBRARIES(controller net pthread)
 
 SET( CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/bin/")
 

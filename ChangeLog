@@ -13,3 +13,8 @@
 
 2013-09-06 23:50 Yao Liu <xunyao0111@gmail.com>
 -Create another project as server application
+
+2013-09-07 11:00 Yao Liu <xuanyao0111@gmail.com>
+-Add Class Controller. 
+ A one-Server/Multiple-Clients structure has been finished.
+ Next to design for K-Means and commands between server and clients. 

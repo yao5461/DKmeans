@@ -74,9 +74,13 @@ private:
     
     //data structure used while calculating
     map<int, vector<double> > m_avgCentroid;	//store the new centroids of each cluster(a part of centroid information)
-    map<int, int> m_numOfCluster;        	//store the number of points in each cluster 
+    map<int, int> m_numInCluster;        	//store the number of points in each cluster 
     map<int, vector<double> > m_centroids;	//centroids from server
   
+    //basic information of this task
+    int m_dataDimension;
+    int m_numOfCluster;
+    int m_lenOfData;
 };
 
 #endif // MAPPER_H

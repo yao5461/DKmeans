@@ -86,7 +86,9 @@ private:
      * @param client	the TCP Socket Object of client
      * @return Whether the task finished successful
      */
-    static void askClientClassifyData(TCPSocket *client);
+    static bool askClientClassifyData(TCPSocket *client);
+    
+    static bool sendCommand(TCPSocket *client, int commandIndex);
     
 private:
     //server information

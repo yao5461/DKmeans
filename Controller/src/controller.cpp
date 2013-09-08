@@ -47,10 +47,10 @@ void Controller::init() {
     this->m_numOfMapper = 3;
     
     //init the init status of each thread
-    m_currMainThreadStatus = NOP;
+    m_currMainThreadStatus = INIT;
     m_currClientThreadsStatus = new int[this->m_numOfMapper];
     for(int i = 0; i < this->m_numOfMapper; i++) {
-	m_currClientThreadsStatus[i] = NOP;
+	m_currClientThreadsStatus[i] = INIT;
     }
     
     //init mutex
@@ -59,7 +59,7 @@ void Controller::init() {
     pthread_mutex_init(&(m_updateMutex), NULL);
     
     //init commands
-    //m_lenOfCommand = 4;             //the length of each command
+    //m_lenOfCommand = 4;           //the length of each command
     m_commands.push_back("sen1");   //send basic information to client
     m_commands.push_back("sen2");   //send centroids information to client
     m_commands.push_back("sen3");   //send data to client
@@ -95,12 +95,14 @@ bool Controller::runTask() {
 	status = m_currMainThreadStatus;
 	pthread_mutex_unlock(&(m_mainStatusMutex));
 
+	cout<<"main thread status: "<<status<<endl;
+	
 	pthread_mutex_lock(&(m_mainStatusMutex));	
 	switch(status) {
 	  case NOP:
-	    if(this->isAllClientsStatus(INIT)) {
-		m_currMainThreadStatus = INIT;
-	    }
+// 	    if(this->isAllClientsStatus(INIT)) {
+// 		m_currMainThreadStatus = INIT;
+// 	    }
 	    break;
 	  case INIT:
 	    if(this->isAllClientsStatus(WAIT)) {
@@ -111,8 +113,17 @@ bool Controller::runTask() {
 	    if(this->isAllClientsStatus(WAIT)) {
 		if(this->canStopTask()) {
 		    m_currMainThreadStatus = END;
-		}
+		} 
 	    }
+	    break;
+	  case WAIT:
+// 	    if(this->isAllClientsStatus(WAIT)) {
+// 		if(this->canStopTask()) {
+// 		    m_currMainThreadStatus = END;
+// 		} else {
+// 		    m_currMainThreadStatus = CAL;
+// 		}
+// 	    }
 	    break;
 	  case END:
 	    working = false;
@@ -189,10 +200,19 @@ void* Controller::clientThread(void* arg) {
     
     cout<<"Thread :"<<clientPort<<endl;
     
-    //init this client thread status chage status into INIT
+    //send basic information to clients
+    if(!sendBasicInfoToClient(client)) {
+	cout<<"#Error: Send basic information failed!"<<endl;
+	return NULL;
+    }
+    
+    //send data to client
+    //to be continue..
+
+    //init this client thread status chage status into WAIT. Client is ready.
     int index = (clientPort % 10) - 1;
     pthread_mutex_lock(&(m_clientStatusMutex));
-    m_currClientThreadsStatus[index] = INIT;
+    m_currClientThreadsStatus[index] = WAIT;
     pthread_mutex_unlock(&(m_clientStatusMutex));
     
     //init flag
@@ -206,10 +226,7 @@ void* Controller::clientThread(void* arg) {
 	pthread_mutex_lock(&(m_mainStatusMutex));
 	status = m_currMainThreadStatus;
 	pthread_mutex_unlock(&(m_mainStatusMutex));
-        
-	//change client thread status or communicate with client according main thread status
-	pthread_mutex_lock(&(m_clientStatusMutex));
-	
+		
 	switch(status) {
 	  case WAIT:
 	    //do nothing, main thread has no status like this.
@@ -218,12 +235,21 @@ void* Controller::clientThread(void* arg) {
 	    working = false;
 	    break;
 	  case INIT:
-	    //send init information to client.
-	    //sendBasicInfoToClient();
+	    //nothing to do
 	    break;
 	  case CAL:
+	    //change client thread status to busy
+	    pthread_mutex_lock(&(m_clientStatusMutex));
+	    m_currClientThreadsStatus[index] = CAL;
+	    pthread_mutex_unlock(&(m_clientStatusMutex));
+	    
 	    //ask client to classify the data.
 	    askClientClassifyData(client);
+	    
+	    //change client thread status to idel
+	    pthread_mutex_lock(&(m_clientStatusMutex));
+	    m_currClientThreadsStatus[index] = WAIT;
+	    pthread_mutex_unlock(&(m_clientStatusMutex));
 	    break;
 	  case NOP:
 	    //There is no status in main thread. Client thread do nothing.
@@ -232,33 +258,16 @@ void* Controller::clientThread(void* arg) {
 	    break;
 	}
 	
-	pthread_mutex_unlock(&(m_clientStatusMutex));
     }
 }
 
 bool Controller::sendBasicInfoToClient(TCPSocket *client) {
-    //send command to client at first  
-    try{
-	client->send(m_commands[0].c_str(), m_commands[0].length());
-    } catch(ClassException<Socket> e) {
-	cout<<"#Error: send command failed! Message:\n\t\t"<<e.what()<<endl;
+    if(!sendCommand(client, 0)) {
 	return false;
     }
     
     char *recvMsg = new char[1024];
-    
-    //receive the message send back from client
-    try{
-	client->recv(recvMsg, 2);
-    } catch(ClassException<Socket> e) {
-	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
-	return false;
-    }
-    
-    //if client receive failed. return false
-    if("OK" != recvMsg) {
-	return false;
-    }
+    string recvFB;
     
     //send basic message
     stringstream sendStr;
@@ -275,22 +284,102 @@ bool Controller::sendBasicInfoToClient(TCPSocket *client) {
     //receive the message send back from client
     try{
 	client->recv(recvMsg, 2);
+	recvFB = recvMsg;
     } catch(ClassException<Socket> e) {
 	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
 	return false;
     }
     
     //if client receive failed. return false
-    if("OK" != recvMsg) {
+    if("OK" != recvFB) {
 	return false;
     }
+    
+    cout<<"Thread-"<<client->getForeignPort()<<": basic data has been sent!"<<endl;
     
     return true;
 }
 
-void Controller::askClientClassifyData(TCPSocket *client) {
-    //should be added
+bool Controller::askClientClassifyData(TCPSocket *client) {
+    char *recvMsg = new char[1024];
+    string strRecv;
+    
+    //step 1: send centroids to clients
+    cout<<"Ask Client-"<<client->getForeignPort()<<": to receive centroids!"<<endl;
+     if(!sendCommand(client, 1)) {
+	return false;
+    }
+    
+    
+    //step 2: send command to let client to do classify
+    cout<<"Ask Client-"<<client->getForeignPort()<<": to do classify!"<<endl;
+    if(!sendCommand(client, 3)) {     
+	return false;
+    }
+    
+    try{
+	client->recv(recvMsg, 2);
+	strRecv = recvMsg;
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    if("OK" != strRecv) {
+	cout<<"client-"<<client->getForeignPort()<<": do classify task failed!"<<endl;
+	return false;
+    }
+    
+    cout<<"client-"<<client->getForeignPort()<<": finish classify task"<<endl;
+    
+    //step 3: ask client send back output data
+    cout<<"Ask Client-"<<client->getForeignPort()<<": to send back output data!"<<endl;
+    if(!sendCommand(client, 4)) {
+	return false;
+    }
+    
+    //step 4: update new centeroid information
+    
+    
+    return true;
 }
+
+bool Controller::sendCommand(TCPSocket* client, int commandIndex) {
+    if(commandIndex >= m_commands.size()) {
+	cout<<"#Error: the command index is out-of size."<<endl;
+	return false;
+    }
+  
+    char *recvMsg = new char[1024];
+    string recvFB;
+  
+    //send command to client at first  
+    try{
+	client->send(m_commands[commandIndex].c_str(), m_commands[0].length());
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: send command failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    //receive the message send back from client
+    try{
+	client->recv(recvMsg, 2);
+	recvFB = recvMsg;
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    //if client receive failed. return false
+    if("OK" != recvFB) {
+	return false;
+    }
+    
+    cout<<"Thread-"<<client->getForeignPort()<<": command %"<<m_commands[commandIndex]<<"% has been sent!"<<endl;
+    
+    return true;
+}
+
 
 
 

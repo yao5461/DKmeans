@@ -29,3 +29,7 @@
 2013-09-07 23:05 Yao Liu <xuanyao0111@gmail.com>
 -Fix the error
  Some variables must be defined in global not local variables
+
+2013-09-08 10:30 Yao Liu <xuanyao0111@gmail.com>
+-Add some code in Class Controller
+ Send commands and data to client in client threads.

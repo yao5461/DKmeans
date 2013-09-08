@@ -10,6 +10,18 @@ pthread_mutex_t m_mainStatusMutex;
 pthread_mutex_t m_clientStatusMutex;
 pthread_mutex_t m_updateMutex;
 
+//store new cnetroids after calculate once
+map< int, vector<double> > m_newCentroids;
+
+//store the command between server and clients
+vector<string> m_commands;
+//int m_lenOfCommand;
+
+//basic information
+int m_dataDimension;
+int m_numOfCluster;
+int m_lenOfData;
+
 
 Controller::Controller() {
     this->init();
@@ -25,9 +37,9 @@ Controller::Controller(const string host, short unsigned int port) {
 }
 
 void Controller::init() {
-    this->m_dataDimension = 3;
-    this->m_numOfCluster = 5;
-    this->m_lenOfData = 10;
+    m_dataDimension = 3;
+    m_numOfCluster = 5;
+    m_lenOfData = 10;
     
     this->m_myHost = "127.0.0.1";
     this->m_myPort = 9990;
@@ -45,6 +57,15 @@ void Controller::init() {
     pthread_mutex_init(&(m_mainStatusMutex), NULL);
     pthread_mutex_init(&(m_clientStatusMutex), NULL);
     pthread_mutex_init(&(m_updateMutex), NULL);
+    
+    //init commands
+    //m_lenOfCommand = 4;             //the length of each command
+    m_commands.push_back("sen1");   //send basic information to client
+    m_commands.push_back("sen2");   //send centroids information to client
+    m_commands.push_back("sen3");   //send data to client
+    m_commands.push_back("ask1");   //ask client to classify
+    m_commands.push_back("ask2");   //ask client to return output information
+    m_commands.push_back("ask3");   //ask client to client
 }
 
 bool Controller::runTask() {
@@ -167,7 +188,7 @@ void* Controller::clientThread(void* arg) {
     unsigned short clientPort = client->getForeignPort();
     
     cout<<"Thread :"<<clientPort<<endl;
-        
+    
     //init this client thread status chage status into INIT
     int index = (clientPort % 10) - 1;
     pthread_mutex_lock(&(m_clientStatusMutex));
@@ -198,11 +219,11 @@ void* Controller::clientThread(void* arg) {
 	    break;
 	  case INIT:
 	    //send init information to client.
-	    sendBasicInfoToClient();
+	    //sendBasicInfoToClient();
 	    break;
 	  case CAL:
 	    //ask client to classify the data.
-	    askClientClassifyData();
+	    askClientClassifyData(client);
 	    break;
 	  case NOP:
 	    //There is no status in main thread. Client thread do nothing.
@@ -215,12 +236,59 @@ void* Controller::clientThread(void* arg) {
     }
 }
 
-bool Controller::sendBasicInfoToClient() {
-    //should be added 
-    return false;
+bool Controller::sendBasicInfoToClient(TCPSocket *client) {
+    //send command to client at first  
+    try{
+	client->send(m_commands[0].c_str(), m_commands[0].length());
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: send command failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    char *recvMsg = new char[1024];
+    
+    //receive the message send back from client
+    try{
+	client->recv(recvMsg, 2);
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    //if client receive failed. return false
+    if("OK" != recvMsg) {
+	return false;
+    }
+    
+    //send basic message
+    stringstream sendStr;
+    sendStr<<m_dataDimension<<'%'<<m_numOfCluster;
+    
+    //send it
+    try{
+	client->send(sendStr.str().c_str(), sendStr.str().length());
+    } catch(ClassException<Socket> e) {
+      	cout<<"#Error: send data failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    //receive the message send back from client
+    try{
+	client->recv(recvMsg, 2);
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
+	return false;
+    }
+    
+    //if client receive failed. return false
+    if("OK" != recvMsg) {
+	return false;
+    }
+    
+    return true;
 }
 
-void Controller::askClientClassifyData() {
+void Controller::askClientClassifyData(TCPSocket *client) {
     //should be added
 }
 

@@ -5,6 +5,8 @@
 #include "net/Socket.h"
 #include <iostream>
 #include <pthread.h>
+#include <map>
+#include <vector>
 
 using namespace net;
 using namespace std;
@@ -72,15 +74,19 @@ private:
     /**
      * Send basic information to client which is belongs to this thread before doing classification.
      * such dimension of data, number of cluster...
+     * @param client	the TCP Socket Object of client
+     * @return whether the task is end with exception
      */
-    static bool sendBasicInfoToClient();
+    static bool sendBasicInfoToClient(TCPSocket *client);
     
     /**
      * Ask client to classify the data in its area.
      * Receive the result from client which is been combined.
      * The result is not the classification information. It is the new centroids information
+     * @param client	the TCP Socket Object of client
+     * @return Whether the task finished successful
      */
-    static void askClientClassifyData();
+    static void askClientClassifyData(TCPSocket *client);
     
 private:
     //server information
@@ -94,9 +100,12 @@ private:
     int m_numOfMapper;
     
     //basic information
-    int m_dataDimension;
-    int m_numOfCluster;
-    int m_lenOfData;
+//    int m_dataDimension;
+//    int m_numOfCluster;
+//    int m_lenOfData;
+    
+    //store the information of centroids
+    map< int, vector<double> > m_currCentroids;
 };
 
 #endif // CONTROLLER_H

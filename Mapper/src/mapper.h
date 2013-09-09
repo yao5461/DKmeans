@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <fstream>
 
 using namespace std;
 using namespace net;
@@ -48,6 +49,12 @@ private:
     void classifyData();
     
     /**
+     * read one data from file.
+     * Just classify this data.
+     */
+    void classifyOneData(vector<double> data);
+    
+    /**
      * Receive the raw data. 
      */
     bool receiveData();
@@ -62,6 +69,11 @@ private:
      * Recieve the information of centroids which are updated in last process loop.
      */
     bool receiveCentroidInfo();
+    
+    /**
+     * After classificaiton task. Send the output data/information back to server.
+     */
+    bool sendOutPutToServer();
   
 private:
     //socket information
@@ -81,6 +93,9 @@ private:
     int m_dataDimension;
     int m_numOfCluster;
     int m_lenOfData;
+    
+    //the directory and name of file store part data which is belongs to this client
+    string m_dataSourceFile;
 };
 
 #endif // MAPPER_H

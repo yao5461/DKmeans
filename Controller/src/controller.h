@@ -5,8 +5,11 @@
 #include "net/Socket.h"
 #include <iostream>
 #include <pthread.h>
+#include <fstream>
+#include <cmath>
 #include <map>
 #include <vector>
+#include <cstdlib>
 
 using namespace net;
 using namespace std;
@@ -67,6 +70,11 @@ private:
     bool canStopTask();
     
     /**
+     * read data from file and calculate the init centroids
+     */
+    bool readDataFromFile();
+    
+    /**
      * The entry function of client thread
      */
     static void *clientThread(void *arg);
@@ -95,6 +103,10 @@ private:
     string m_myHost;
     unsigned short m_myPort;
     
+    //source data file directory
+    string m_sourceDataFile;
+    string m_configurationFile;
+    
     //server socket object
     TCPServerSocket *m_ptrServerScoket;
     
@@ -107,7 +119,8 @@ private:
 //    int m_lenOfData;
     
     //store the information of centroids
-    map< int, vector<double> > m_currCentroids;
+    //map< int, vector<double> > m_currCentroids;
+    
 };
 
 #endif // CONTROLLER_H

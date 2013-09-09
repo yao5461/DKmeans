@@ -12,6 +12,9 @@ pthread_mutex_t m_updateMutex;
 
 //store new cnetroids after calculate once
 map< int, vector<double> > m_newCentroids;
+map< int, int > m_newCentroidsDataNum;
+//store the information of centroids
+map< int, vector<double> > m_currCentroids;
 
 //store the command between server and clients
 vector<string> m_commands;
@@ -38,13 +41,16 @@ Controller::Controller(const string host, short unsigned int port) {
 
 void Controller::init() {
     m_dataDimension = 3;
-    m_numOfCluster = 5;
-    m_lenOfData = 10;
+    m_numOfCluster = 4;
+    m_lenOfData = 12;
     
     this->m_myHost = "127.0.0.1";
     this->m_myPort = 9990;
     
     this->m_numOfMapper = 3;
+    
+    this->m_sourceDataFile = "Data.txt";
+    this->m_sourceDataFile = "configuration.conf";
     
     //init the init status of each thread
     m_currMainThreadStatus = INIT;
@@ -69,6 +75,8 @@ void Controller::init() {
 }
 
 bool Controller::runTask() {
+    //step 0: read data and calculate the init centroids
+    this->readDataFromFile();
     
     //step 1: create server
     cout<<"try to create a server...."<<endl;
@@ -100,9 +108,6 @@ bool Controller::runTask() {
 	pthread_mutex_lock(&(m_mainStatusMutex));	
 	switch(status) {
 	  case NOP:
-// 	    if(this->isAllClientsStatus(INIT)) {
-// 		m_currMainThreadStatus = INIT;
-// 	    }
 	    break;
 	  case INIT:
 	    if(this->isAllClientsStatus(WAIT)) {
@@ -193,6 +198,7 @@ bool Controller::waitAllClients() {
     return true;
 }
 
+
 void* Controller::clientThread(void* arg) {
     //get client tcp socket object
     TCPSocket *client = static_cast<TCPSocket*>(arg); 
@@ -226,7 +232,7 @@ void* Controller::clientThread(void* arg) {
 	pthread_mutex_lock(&(m_mainStatusMutex));
 	status = m_currMainThreadStatus;
 	pthread_mutex_unlock(&(m_mainStatusMutex));
-		
+	
 	switch(status) {
 	  case WAIT:
 	    //do nothing, main thread has no status like this.
@@ -257,7 +263,6 @@ void* Controller::clientThread(void* arg) {
 	  default:
 	    break;
 	}
-	
     }
 }
 
@@ -310,6 +315,43 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	return false;
     }
     
+    //get current centroids information
+    map< int, vector<double> > copyCurrCentroids;
+    pthread_mutex_lock(&(m_updateMutex));
+    copyCurrCentroids = m_currCentroids;
+    pthread_mutex_unlock(&(m_updateMutex));
+    
+    //send centroids to clients
+    for(int i = 0; i < m_numOfCluster; i++) {
+	stringstream sendStr;
+	
+	for(int j = 0; j < m_dataDimension; j++) {
+	    sendStr<<copyCurrCentroids[i][j]<<'%';
+	}
+	
+	//send it
+	try {
+	    client->send(sendStr.str().c_str(), sendStr.str().length());
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: send error when send current centroids information!\n\t\t"<<e.what()<<endl;
+	    return false;
+	}
+	
+	//receive feed back. If it is successful, go on.
+	try{
+	    client->recv(recvMsg, 2);
+	    strRecv = recvMsg;
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: receive feedback failed! Message:\n\t\t"<<e.what()<<endl;
+	    return false;
+	}
+	
+	if("OK" != strRecv) {
+	    cout<<"client-"<<client->getForeignPort()<<": send current controids data "<<i<<" failed!"<<endl;
+	    return false;
+	}
+    }
+    cout<<"client-"<<client->getForeignPort()<<": finish send current centroids task"<<endl;
     
     //step 2: send command to let client to do classify
     cout<<"Ask Client-"<<client->getForeignPort()<<": to do classify!"<<endl;
@@ -338,8 +380,55 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	return false;
     }
     
-    //step 4: update new centeroid information
+    map<int, vector<double> > tempNewCentroids;
+    map<int, int> tempCentrooidsDataNum;
     
+    //receive new centroids information from clients
+    for(int i = 0; i < m_numOfCluster; i++) {
+        //receive number of data in new centroids
+	try {
+	    client->recv(recvMsg, 1024);         //receive
+	    strRecv = recvMsg;			  //copy to string type
+	    tempCentrooidsDataNum[i] = atoi(strRecv.c_str());  //convert to int
+	    client->send("OK", 2);		    //feedback
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: receive output data from clients failed!"<<endl;
+	    return false;
+	}
+	
+	//receive average new controids
+	try {
+	    client->recv(recvMsg, 1024);
+	    strRecv = recvMsg;
+	    client->send("OK", 2);	    
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: receive output data from clients failed!"<<endl;
+	    return false;
+	}
+	
+	//parse received partly new centroids data, and save into map
+	vector<double> temp;
+	for(int j = 0; j < m_dataDimension; j++) {
+	    int index = strRecv.find_first_of('%');     //search
+	    string subStr = strRecv.substr(0, index);   //copy
+	    strRecv.erase(0, index);                    //cut
+	    temp[j] = atof(subStr.c_str());		 //convert and store
+	}
+	
+	//store into temp map
+	tempNewCentroids[i] = temp;
+	
+    }
+    
+    //step 4: update new centeroid information
+    pthread_mutex_lock(&(m_updateMutex));
+    for(int i = 0; i < m_numOfCluster; i++) {
+	for(int j = 0; j < m_dataDimension; j++) {
+	    m_newCentroids[i][j] = m_newCentroids[i][j] * m_newCentroidsDataNum[i] + tempNewCentroids[i][j] * tempCentrooidsDataNum[i];
+	}
+	m_newCentroidsDataNum[i] += tempCentrooidsDataNum[i];
+    }
+    pthread_mutex_unlock(&(m_updateMutex));
     
     return true;
 }
@@ -352,8 +441,8 @@ bool Controller::sendCommand(TCPSocket* client, int commandIndex) {
   
     char *recvMsg = new char[1024];
     string recvFB;
-  
-    //send command to client at first  
+    
+    //send command to client at first
     try{
 	client->send(m_commands[commandIndex].c_str(), m_commands[0].length());
     } catch(ClassException<Socket> e) {
@@ -381,11 +470,52 @@ bool Controller::sendCommand(TCPSocket* client, int commandIndex) {
 }
 
 
-
-
-
-
-
-
-
-
+bool Controller::readDataFromFile() {
+    ifstream inFile(this->m_sourceDataFile.c_str(), ios::in);
+    if(!inFile) {
+	cout<<"#Error: read source data file failed!"<<endl;
+	return false;
+    }
+    
+    //vector<double> temp;
+    vector<double> max;
+    vector<double> min;
+    
+    //read source data
+    for(int i = 0; i < m_lenOfData; i++) {
+	for(int j = 0; j < m_dataDimension; j++) {
+	   double temp;
+	   inFile>>temp;
+	   
+	   if(i == 0 ) {
+		max[j] = temp;
+		min[j] = temp;
+	   } else if(temp < min[j]) {
+		min[j] = temp;
+	   } else if(temp > max[j]) {
+		max[j] = temp;
+	   } else {
+		//do other thing
+	   }
+	}
+    }
+    
+    //generate the init centroids by random
+    for(int i = 0; i < m_numOfCluster; i++) {
+	vector<double> tempPoint;
+	for(int j = 0; j < m_dataDimension; j++) {
+	   int tempValue = ceil(max[j] - min[j]);
+	   tempPoint[j] = rand() % tempValue + min[j];
+	}
+	m_currCentroids[i] = tempPoint;
+    }
+    
+    //test code: output the current centroids generate in last step
+    for(int i = 0; i < m_numOfCluster; i++) {
+	for(int j =0; j < m_dataDimension; j++) {
+	    cout<<m_currCentroids[i][j]<<'\t';
+	}
+	cout<<endl;
+    }
+    
+}

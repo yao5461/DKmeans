@@ -11,6 +11,8 @@ Mapper::~Mapper() {
 Mapper::Mapper(const string& host, unsigned short port) {
   this->m_myHost = host;
   this->m_myPort = port;
+ 
+  this->m_dataSourceFile = "Data.text";
 }
 
 bool Mapper::runTask() {
@@ -24,7 +26,7 @@ bool Mapper::runTask() {
 	return false;
     }
     
-    cout<<"connected! \nwait commands"<<endl;
+    cout<<"wait commands"<<endl;
     
     //step2: wait for command
     bool working = true;
@@ -60,18 +62,15 @@ bool Mapper::runTask() {
 	    working = false;   //end
 	} else {
 	    cout<<"#Warning: the command % "<<recvCommand<<" % is not defined!"<<endl;
-	    
 	}
-	
     }
     
-    this->m_ptrSocket->cleanUp();
-    
+    this->m_ptrSocket->cleanUp(); 
 }
 
 bool Mapper::establishConnect(const string& foreignAddress, unsigned short foreignPort) {
     bool flag = true;
-  
+    
     try{ 	     
 	//this->m_ptrSocket = new SocketStream<TCPSocket>(foreignAddress, foreignPort);
 	this->m_ptrSocket = new TCPSocket();
@@ -88,11 +87,32 @@ bool Mapper::establishConnect(const string& foreignAddress, unsigned short forei
 void Mapper::classifyData() {
     cout<<"do classify"<<endl;
     
+    //open file
+    ifstream inFile(this->m_dataSourceFile.c_str(), ios::in);
+    if(!inFile) {
+	cout<<"#Error: read source data file failed!"<<endl;
+	return ;
+    }
+    
+    for(int i = 0; i < this->m_lenOfData; i++) {
+	vector<double> temp;
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    inFile>>temp[i];
+	}
+	
+	this->classifyOneData(temp);
+    }
+    
+    //send result to server
     try{
 	this->m_ptrSocket->send("OK", 2);
     } catch(ClassException<Socket> e) {
 	cout<<"#Error: when send back OK to sever\n\t\tMessage: "<<e.what()<<endl;
     }
+}
+
+void Mapper::classifyOneData(std::vector< double > data) {
+    
 }
 
 bool Mapper::receiveBasicInfo() {
@@ -129,11 +149,43 @@ bool Mapper::receiveBasicInfo() {
 }
 
 bool Mapper::receiveCentroidInfo() {
-    cout<<"receive Centroids"<<endl;
+    cout<<"Try to receive current Centroids information!"<<endl;
+    
+    for(int i = 0; i < m_numOfCluster; i++) {
+	char *recvMsg = new char[1024];
+	string recvStr;
+	
+	try {
+	    this->m_ptrSocket->recv(recvMsg, 1024);   //receive data
+	    recvStr = recvMsg;				//convert data
+	    this->m_ptrSocket->send("OK", 2);		//feed back
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: receive current centroids data-"<<i<<" failed!\n\t\tMessage: "<<e.what()<<endl;
+	    return false;
+	}
+	
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    int index = recvStr.find_first_of('%');		//decide end of sub-string
+	    string subStr = recvStr.substr(0, index);		//get sub-string
+	    recvStr.erase(0, index+1);				//cut sub-string
+	    this->m_centroids[i][j] = atof(subStr.c_str());		//convert and store
+	}
+	
+	delete recvMsg;
+    }
+    
+    cout<<"Finish to receive current Centroids information!"<<endl;
+    
     return true;
 }
 
 bool Mapper::receiveData() {
+    
+    return true;
+}
+
+bool Mapper::sendOutPutToServer() {
+    
     return true;
 }
 

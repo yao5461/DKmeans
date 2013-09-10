@@ -42,3 +42,12 @@
 -Update codes. Add data transimit and parse. But it haven't been tested
  Finish the baisc function next.
  Do more optimization.
+
+2013-09-10 21:20 Yao Liu <xuanyao0111@gmail.com>
+-Update codes. I think the basic version is finished!
+ I need to do test in order to find bugs and errors in logic.
+ And I found three points need to be optimized:
+	-The structure of multiples thread in controller.
+	-The data store and transimition.
+	-The algorithm to generate init centroids. KMeans++
+

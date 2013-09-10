@@ -9,10 +9,10 @@ Mapper::~Mapper() {
 }
 
 Mapper::Mapper(const string& host, unsigned short port) {
-  this->m_myHost = host;
-  this->m_myPort = port;
- 
-  this->m_dataSourceFile = "Data.text";
+    this->m_myHost = host;
+    this->m_myPort = port;
+  
+    this->m_dataSourceFile = "Data.text";
 }
 
 bool Mapper::runTask() {
@@ -49,7 +49,7 @@ bool Mapper::runTask() {
 	if("ask1" == recvCommand) {		//do classify
 	    this->classifyData();
 	} else if("ask2" == recvCommand) {	//send output data after classify to server
-	    //do nothing now
+	    this->sendOutPutToServer();
 	} else if("sen1" == recvCommand) {     //receive basic information
 	    this->receiveBasicInfo();
 	} else if("sen2" == recvCommand){	//receive the centroid information
@@ -87,6 +87,16 @@ bool Mapper::establishConnect(const string& foreignAddress, unsigned short forei
 void Mapper::classifyData() {
     cout<<"do classify"<<endl;
     
+    //clean store space
+    //init the store space
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    this->m_avgCentroid[i].push_back(0);
+	}
+	
+	this->m_numInCluster[i] = 0;
+    }
+    
     //open file
     ifstream inFile(this->m_dataSourceFile.c_str(), ios::in);
     if(!inFile) {
@@ -94,6 +104,7 @@ void Mapper::classifyData() {
 	return ;
     }
     
+    //read data and classify
     for(int i = 0; i < this->m_lenOfData; i++) {
 	vector<double> temp;
 	for(int j = 0; j < this->m_dataDimension; j++) {
@@ -101,6 +112,13 @@ void Mapper::classifyData() {
 	}
 	
 	this->classifyOneData(temp);
+    }
+    
+    //calculate the average cnetroids
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    this->m_avgCentroid[i][j] /= this->m_numInCluster[i];
+	}
     }
     
     //send result to server
@@ -112,7 +130,30 @@ void Mapper::classifyData() {
 }
 
 void Mapper::classifyOneData(std::vector< double > data) {
+    double dist = -1;		//the minimum distance from point to centroid 
+    int result = -1;		//the id which the point belongs to	
     
+    //decide the mimumn distance and the which cluster
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	double temp = 0;
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    temp += pow((data[j]-this->m_centroids[i][j]), 2);
+	}
+	
+	temp = sqrt(temp);
+	
+	if(temp < dist || dist == -1) {
+	    dist = temp;
+	    result = i;	
+	    
+	}
+    }
+    
+    //store into the map
+    this->m_numInCluster[result] += 1;
+    for(int i = 0; i < this->m_dataDimension; i++) {
+	this->m_avgCentroid[result][i] += data[i];
+    }
 }
 
 bool Mapper::receiveBasicInfo() {
@@ -185,9 +226,68 @@ bool Mapper::receiveData() {
 }
 
 bool Mapper::sendOutPutToServer() {
+    cout<<"Try to send output data to server!"<<endl;
+    
+    //send all new new centroids to server
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	stringstream sendStr;
+	
+	sendStr<<this->m_numInCluster[i];
+	
+	//send number of data in cluster-i
+	if(!(this->sendOneData(sendStr))){
+	    return false;
+	}
+	
+	//cleand buffer
+	sendStr.clear();
+	
+	//send this centroid
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    sendStr<<this->m_avgCentroid[i][j]<<'%';
+	}
+	
+	//send number of this cluster
+	if(!(this->sendOneData(sendStr))){
+	    return false;
+	}
+    }
+  
+    cout<<"Finish sending the data!"<<endl;
+  
+    return true;
+}
+
+bool Mapper::sendOneData(const stringstream& sendStr) {
+    char *recvMsg = new char[1024];
+    string recvStr;
+    
+    //send data
+    try {
+	this->m_ptrSocket->send(sendStr.str().c_str(), sendStr.str().length());
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: can't send centroids data in cluster!"<<endl;
+	return false;
+    }
+    
+    //receive feed back
+    try {
+	this->m_ptrSocket->recv(recvMsg, 2);
+	recvStr = recvMsg;
+    } catch(ClassException<Socket> e) {
+	cout<<"#Error: can't receive feedback from server!"<<endl;
+	return false;
+    }
+    
+    //whether it is ok
+    if("OK" != recvStr) {
+	cout<<"#Error: receive feedback from server failed!"<<endl;
+	return false;
+    }
     
     return true;
 }
+
 
 
 

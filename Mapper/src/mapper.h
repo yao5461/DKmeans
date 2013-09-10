@@ -6,9 +6,11 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <cmath>
 #include <map>
 #include <vector>
 #include <fstream>
+#include <sstream>
 
 using namespace std;
 using namespace net;
@@ -75,6 +77,12 @@ private:
      */
     bool sendOutPutToServer();
   
+    /**
+     * The function is just responsible for send data
+     * @param sendStr	the data need to be sent
+     */
+    bool sendOneData(const stringstream& sendStr);
+    
 private:
     //socket information
     string m_myHost;

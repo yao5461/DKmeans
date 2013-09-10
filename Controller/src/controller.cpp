@@ -72,6 +72,15 @@ void Controller::init() {
     m_commands.push_back("ask1");   //ask client to classify
     m_commands.push_back("ask2");   //ask client to return output information
     m_commands.push_back("ask3");   //ask client to client
+    
+    //init map store space
+    for(int i = 0; i < m_numOfCluster; i++) {
+	for(int j = 0; j < m_dataDimension; j++) {
+	    m_newCentroids[i].push_back(0);
+	    m_currCentroids[i].push_back(0);
+	}
+	m_newCentroidsDataNum[i] = 0;
+    }
 }
 
 bool Controller::runTask() {
@@ -396,6 +405,10 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	    return false;
 	}
 	
+	//clean buffer
+	delete recvMsg;
+	recvMsg = new char[1024];
+	
 	//receive average new controids
 	try {
 	    client->recv(recvMsg, 1024);
@@ -417,7 +430,6 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	
 	//store into temp map
 	tempNewCentroids[i] = temp;
-	
     }
     
     //step 4: update new centeroid information

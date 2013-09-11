@@ -12,12 +12,44 @@ Mapper::Mapper(const string& host, unsigned short port) {
     this->m_myHost = host;
     this->m_myPort = port;
   
-    this->m_dataSourceFile = "Data.text";
+    this->init();
+}
+
+void Mapper::init() {
+    //need to be modified.
+    switch(this->m_myPort) {
+      case 5551:
+	this->m_dataSourceFile = "./data/Data1.txt";
+	this->m_resultFile = "./data/Result1.txt";
+	break;
+      case 5552:
+	this->m_dataSourceFile = "./data/Data2.txt";
+	this->m_resultFile = "./data/Result2.txt";
+	break;
+      case 5553:
+	this->m_dataSourceFile = "./data/Data3.txt";
+	this->m_resultFile = "./data/Result3.txt";
+	break;
+      default:
+	break;
+    }
+    
+    this->m_lenOfData = 4;
+    
+    vector<double> temp;
+    for(int i = 0; i < this->m_dataDimension; i++) {
+	temp.push_back(0);
+    }
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	this->m_avgCentroid.insert(map< int, vector<double> >::value_type(i, temp));
+	this->m_centroids.insert(map< int, vector<double> >::value_type(i, temp));
+	this->m_numInCluster.insert(map< int, int >::value_type(i, 0));
+    }
 }
 
 bool Mapper::runTask() {
     const string & foreignAddress = "127.0.0.1";
-    unsigned short foreignPort = 9990;
+    unsigned short foreignPort = 5550;
   
     cout<<"try to connect to the server!"<<endl;
     //step1: connect to server
@@ -38,10 +70,10 @@ bool Mapper::runTask() {
 	    this->m_ptrSocket->send("NO", 2);
 	    continue;
 	} else {
+	    sleep((this->m_myPort % 10));
 	    this->m_ptrSocket->send("OK", 2);
 	}
 	
-	bool isCommandCorrect = true;
 	string recvCommand = recvMsg;
 	cout<<"receive command: "<<recvCommand<<endl;
 	
@@ -65,7 +97,7 @@ bool Mapper::runTask() {
 	}
     }
     
-    this->m_ptrSocket->cleanUp(); 
+    this->m_ptrSocket->cleanUp();
 }
 
 bool Mapper::establishConnect(const string& foreignAddress, unsigned short foreignPort) {
@@ -97,6 +129,13 @@ void Mapper::classifyData() {
 	this->m_numInCluster[i] = 0;
     }
     
+    //open the file to write result;
+    ofstream outFile(this->m_resultFile.c_str(), ios::out);
+    if(!outFile) {
+	cout<<"#Error: open target file which stores the result failed!"<<endl;
+	return ;
+    }
+    
     //open file
     ifstream inFile(this->m_dataSourceFile.c_str(), ios::in);
     if(!inFile) {
@@ -105,14 +144,20 @@ void Mapper::classifyData() {
     }
     
     //read data and classify
+    vector<double> temp;
+    for(int i = 0; i < m_dataDimension; i++) {
+	temp.push_back(0);
+    }
     for(int i = 0; i < this->m_lenOfData; i++) {
-	vector<double> temp;
 	for(int j = 0; j < this->m_dataDimension; j++) {
 	    inFile>>temp[i];
 	}
 	
-	this->classifyOneData(temp);
+	this->classifyOneData(temp, outFile);
     }
+    
+    //close the file
+    outFile.close();
     
     //calculate the average cnetroids
     for(int i = 0; i < this->m_numOfCluster; i++) {
@@ -129,7 +174,7 @@ void Mapper::classifyData() {
     }
 }
 
-void Mapper::classifyOneData(std::vector< double > data) {
+void Mapper::classifyOneData(std::vector< double > data, ofstream& outFile) {
     double dist = -1;		//the minimum distance from point to centroid 
     int result = -1;		//the id which the point belongs to	
     
@@ -145,7 +190,6 @@ void Mapper::classifyOneData(std::vector< double > data) {
 	if(temp < dist || dist == -1) {
 	    dist = temp;
 	    result = i;	
-	    
 	}
     }
     
@@ -154,6 +198,12 @@ void Mapper::classifyOneData(std::vector< double > data) {
     for(int i = 0; i < this->m_dataDimension; i++) {
 	this->m_avgCentroid[result][i] += data[i];
     }
+    
+    //write into the file
+    for(int i = 0; i < this->m_dataDimension; i++) {
+	outFile<<data[i]<<' ';
+    }
+    outFile<<'\t'<<result<<endl;
 }
 
 bool Mapper::receiveBasicInfo() {
@@ -178,6 +228,8 @@ bool Mapper::receiveBasicInfo() {
     this->m_dataDimension = atoi(strDataDiemsion.c_str());
     this->m_numOfCluster = atoi(strNumCluster.c_str());
     
+    cout<<"now data: "<<m_dataDimension<<"\t\t"<<m_numOfCluster<<endl;
+    
     //send back
     try {
 	this->m_ptrSocket->send("OK", 2);
@@ -196,6 +248,8 @@ bool Mapper::receiveCentroidInfo() {
 	char *recvMsg = new char[1024];
 	string recvStr;
 	
+	cout<<"try to receive data-"<<i<<endl;
+	
 	try {
 	    this->m_ptrSocket->recv(recvMsg, 1024);   //receive data
 	    recvStr = recvMsg;				//convert data
@@ -205,14 +259,23 @@ bool Mapper::receiveCentroidInfo() {
 	    return false;
 	}
 	
+	cout<<"received data string: "<<recvStr<<endl;
+	
+	vector<double> tempValue;
+	
 	for(int j = 0; j < this->m_dataDimension; j++) {
 	    int index = recvStr.find_first_of('%');		//decide end of sub-string
 	    string subStr = recvStr.substr(0, index);		//get sub-string
 	    recvStr.erase(0, index+1);				//cut sub-string
-	    this->m_centroids[i][j] = atof(subStr.c_str());		//convert and store
+	    double value = atof(subStr.c_str());    
+	    tempValue.push_back(value);				//convert and store
 	}
 	
+	this->m_centroids[i] = tempValue;
+	
 	delete recvMsg;
+	
+	cout<<"Finished to receive data-"<<i<<endl;
     }
     
     cout<<"Finish to receive current Centroids information!"<<endl;

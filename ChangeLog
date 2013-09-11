@@ -51,3 +51,6 @@
 	-The data store and transimition.
 	-The algorithm to generate init centroids. KMeans++
 
+2013-09-11 22:40 Yao Liu <xuanyao0111@gmail.com>
+-Update codes. Fixed some bugs. To be continue....
+ 

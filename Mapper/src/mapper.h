@@ -11,6 +11,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <unistd.h>
 
 using namespace std;
 using namespace net;
@@ -38,6 +39,11 @@ public:
 private:
     
     /**
+     * init the store space and some variables
+     */
+    void init();
+  
+    /**
      * connect to server and wait for command
      */
     bool establishConnect(const string& foreignAddress, unsigned short port);
@@ -54,7 +60,7 @@ private:
      * read one data from file.
      * Just classify this data.
      */
-    void classifyOneData(vector<double> data);
+    void classifyOneData(vector<double> data, ofstream& outFile);
     
     /**
      * Receive the raw data. 
@@ -96,7 +102,7 @@ private:
     map<int, vector<double> > m_avgCentroid;	//store the new centroids of each cluster(a part of centroid information)
     map<int, int> m_numInCluster;        	//store the number of points in each cluster 
     map<int, vector<double> > m_centroids;	//centroids from server
-  
+    
     //basic information of this task
     int m_dataDimension;
     int m_numOfCluster;
@@ -104,6 +110,8 @@ private:
     
     //the directory and name of file store part data which is belongs to this client
     string m_dataSourceFile;
+    //the file to write the result
+    string m_resultFile;
 };
 
 #endif // MAPPER_H

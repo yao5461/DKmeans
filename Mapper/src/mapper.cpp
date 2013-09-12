@@ -12,7 +12,7 @@ Mapper::Mapper(const string& host, unsigned short port) {
     this->m_myHost = host;
     this->m_myPort = port;
   
-    this->init();
+    //this->init();
 }
 
 void Mapper::init() {
@@ -119,16 +119,6 @@ bool Mapper::establishConnect(const string& foreignAddress, unsigned short forei
 void Mapper::classifyData() {
     cout<<"do classify"<<endl;
     
-    //clean store space
-    //init the store space
-    for(int i = 0; i < this->m_numOfCluster; i++) {
-	for(int j = 0; j < this->m_dataDimension; j++) {
-	    this->m_avgCentroid[i].push_back(0);
-	}
-	
-	this->m_numInCluster[i] = 0;
-    }
-    
     //open the file to write result;
     ofstream outFile(this->m_resultFile.c_str(), ios::out);
     if(!outFile) {
@@ -136,28 +126,39 @@ void Mapper::classifyData() {
 	return ;
     }
     
-    //open file
+    //open source data file
     ifstream inFile(this->m_dataSourceFile.c_str(), ios::in);
     if(!inFile) {
 	cout<<"#Error: read source data file failed!"<<endl;
 	return ;
     }
     
+    //clean the store space
+    vector<double> tempVector;
+    for(int i = 0; i < this->m_dataDimension; i++) {
+	tempVector.push_back(0);
+    }
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	this->m_numInCluster[i] = 0;
+	this->m_avgCentroid[i] = tempVector;
+    }
+    
     //read data and classify
     vector<double> temp;
-    for(int i = 0; i < m_dataDimension; i++) {
-	temp.push_back(0);
-    }
+    double tempValue;
     for(int i = 0; i < this->m_lenOfData; i++) {
 	for(int j = 0; j < this->m_dataDimension; j++) {
-	    inFile>>temp[i];
+	    inFile>>tempValue;
+	    temp.push_back(tempValue);
 	}
 	
 	this->classifyOneData(temp, outFile);
+	temp.clear();
     }
     
     //close the file
     outFile.close();
+    inFile.close();
     
     //calculate the average cnetroids
     for(int i = 0; i < this->m_numOfCluster; i++) {
@@ -177,7 +178,7 @@ void Mapper::classifyData() {
 void Mapper::classifyOneData(std::vector< double > data, ofstream& outFile) {
     double dist = -1;		//the minimum distance from point to centroid 
     int result = -1;		//the id which the point belongs to	
-    
+
     //decide the mimumn distance and the which cluster
     for(int i = 0; i < this->m_numOfCluster; i++) {
 	double temp = 0;
@@ -195,9 +196,12 @@ void Mapper::classifyOneData(std::vector< double > data, ofstream& outFile) {
     
     //store into the map
     this->m_numInCluster[result] += 1;
+    vector<double> tempVector = this->m_avgCentroid[result];
     for(int i = 0; i < this->m_dataDimension; i++) {
-	this->m_avgCentroid[result][i] += data[i];
+	//this->m_avgCentroid[result][i] += data[i];
+	tempVector[i] += data[i];
     }
+    this->m_avgCentroid[result] = tempVector;
     
     //write into the file
     for(int i = 0; i < this->m_dataDimension; i++) {
@@ -238,6 +242,9 @@ bool Mapper::receiveBasicInfo() {
 	return false;
     }
     
+    //init store space;
+    this->init();
+    
     return true;
 }
 
@@ -248,7 +255,7 @@ bool Mapper::receiveCentroidInfo() {
 	char *recvMsg = new char[1024];
 	string recvStr;
 	
-	cout<<"try to receive data-"<<i<<endl;
+	cout<<"try to receive centroids-"<<i<<endl;
 	
 	try {
 	    this->m_ptrSocket->recv(recvMsg, 1024);   //receive data
@@ -275,10 +282,20 @@ bool Mapper::receiveCentroidInfo() {
 	
 	delete recvMsg;
 	
-	cout<<"Finished to receive data-"<<i<<endl;
+	cout<<"Finished to receive centroids-"<<i<<endl;
     }
     
     cout<<"Finish to receive current Centroids information!"<<endl;
+    
+    //test code print centroids
+    cout<<"now centroids!"<<endl;
+    for(int i = 0; i < this->m_numOfCluster; i++) {
+	for(int j = 0; j < this->m_dataDimension; j++) {
+	    cout<<this->m_centroids[i][j]<<'\t';
+	}
+	cout<<endl;
+    }
+    cout<<endl;
     
     return true;
 }
@@ -297,10 +314,14 @@ bool Mapper::sendOutPutToServer() {
 	
 	sendStr<<this->m_numInCluster[i];
 	
+	cout<<"try to send number data of cluster-"<<i<<"\t the string is: "<<sendStr.str()<<endl;
+	
 	//send number of data in cluster-i
 	if(!(this->sendOneData(sendStr))){
 	    return false;
 	}
+	
+	cout<<"finished! send number data of cluster-"<<i<<endl;
 	
 	//cleand buffer
 	sendStr.clear();
@@ -310,10 +331,14 @@ bool Mapper::sendOutPutToServer() {
 	    sendStr<<this->m_avgCentroid[i][j]<<'%';
 	}
 	
-	//send number of this cluster
+	cout<<"try to send part of centroids of cluster-"<<i<<"\tthe string is: "<<sendStr.str()<<endl;
+	
+	//send centroids of this cluster
 	if(!(this->sendOneData(sendStr))){
 	    return false;
 	}
+	
+	cout<<"try to send part of centroids of cluster-"<<i<<endl;
     }
   
     cout<<"Finish sending the data!"<<endl;
@@ -323,7 +348,7 @@ bool Mapper::sendOutPutToServer() {
 
 bool Mapper::sendOneData(const stringstream& sendStr) {
     char *recvMsg = new char[1024];
-    string recvStr;
+    string recvStr = "";
     
     //send data
     try {
@@ -335,18 +360,23 @@ bool Mapper::sendOneData(const stringstream& sendStr) {
     
     //receive feed back
     try {
-	this->m_ptrSocket->recv(recvMsg, 2);
-	recvStr = recvMsg;
+	this->m_ptrSocket->recv(recvMsg, 4);
+	recvStr += recvMsg[0];
+	recvStr += recvMsg[1];
     } catch(ClassException<Socket> e) {
 	cout<<"#Error: can't receive feedback from server!"<<endl;
 	return false;
     }
     
+    //cout<<"Received feedback message: "<<recvStr<<endl;
+    
     //whether it is ok
     if("OK" != recvStr) {
-	cout<<"#Error: receive feedback from server failed!"<<endl;
+	cout<<"#Error!!!: receive feedback from server failed!"<<endl;
 	return false;
     }
+    
+    delete recvMsg;
     
     return true;
 }

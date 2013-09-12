@@ -16,6 +16,9 @@ map< int, int > m_newCentroidsDataNum;
 //store the information of centroids
 map< int, vector<double> > m_currCentroids;
 
+//a flag to record whether has been classified
+bool m_hasNoClassified;
+
 //store the command between server and clients
 vector<string> m_commands;
 //int m_lenOfCommand;
@@ -83,6 +86,8 @@ void Controller::init() {
 	m_currCentroids.insert(map< int, vector<double> >::value_type(i, temp));
 	m_newCentroidsDataNum.insert(map< int, int >::value_type(i, 0));
     }
+    
+    m_hasNoClassified = false;
 }
 
 bool Controller::runTask() {
@@ -115,6 +120,17 @@ bool Controller::runTask() {
 	pthread_mutex_unlock(&(m_mainStatusMutex));
 
 	//cout<<"main thread status: "<<status<<endl;
+	//clean the store space
+	vector<double> tempVector;
+	for(int i = 0; i < m_dataDimension; i++) {
+	    tempVector.push_back(0);
+	}
+	pthread_mutex_lock(&(m_updateMutex));
+	for(int i = 0; i < m_numOfCluster; i++) {
+	    m_newCentroids[i] = tempVector;
+	    m_newCentroidsDataNum[i] = 0;
+	}
+	pthread_mutex_unlock(&(m_updateMutex));
 	
 	pthread_mutex_lock(&(m_mainStatusMutex));	
 	switch(status) {
@@ -126,20 +142,23 @@ bool Controller::runTask() {
 	    }
 	    break;
 	  case CAL:
-	    if(this->isAllClientsStatus(WAIT)) {
-		if(this->canStopTask()) {
-		    m_currMainThreadStatus = END;
-		} 
-	    }
-	    break;
-	  case WAIT:
 // 	    if(this->isAllClientsStatus(WAIT)) {
 // 		if(this->canStopTask()) {
 // 		    m_currMainThreadStatus = END;
-// 		} else {
-// 		    m_currMainThreadStatus = CAL;
-// 		}
+// 		} 
 // 	    }
+	    if(this->isAllClientsStatus(CAL)) {
+		m_currMainThreadStatus = WAIT;
+	    }
+	    break;
+	  case WAIT:
+	    if(this->isAllClientsStatus(WAIT)) {
+		if(this->canStopTask()) {
+		    m_currMainThreadStatus = END;
+		} else {
+		    m_currMainThreadStatus = CAL;
+		}
+	    }
 	    break;
 	  case END:
 	    working = false;
@@ -150,7 +169,6 @@ bool Controller::runTask() {
 	pthread_mutex_unlock(&(m_mainStatusMutex));
     }
 }
-
 
 bool Controller::isAllClientsStatus(int tartgetStatus) {
     bool flag = true;
@@ -170,6 +188,16 @@ bool Controller::isAllClientsStatus(int tartgetStatus) {
 bool Controller::canStopTask() {
     bool result = true;
     
+    //test code to print new centroids
+    cout<<"test new centroids"<<endl;
+    for(int i = 0; i < m_numOfCluster; i++) {
+	for(int j = 0; j < m_dataDimension; j++) {
+	    cout<<m_newCentroids[i][j]<<' ';
+	}
+	cout<<"\t"<<m_newCentroidsDataNum[i]<<endl;
+    }
+    cout<<endl;
+    
     pthread_mutex_lock(&(m_updateMutex));
     for(int i = 0 ; i < m_numOfCluster; i++) {
 	for(int j = 0; j < m_dataDimension; j++) {
@@ -181,6 +209,14 @@ bool Controller::canStopTask() {
 	
 	if(!result) {
 	    break;
+	}
+    }
+    
+    //update centroids
+    if(m_hasNoClassified && !result) {
+      cout<<"!!!!!!!!!!!!!!!"<<endl;
+	for(int i = 0; i < m_numOfCluster; i++) {
+	    m_currCentroids[i] = m_newCentroids[i];
 	}
     }
     pthread_mutex_unlock(&(m_updateMutex));
@@ -253,7 +289,7 @@ void* Controller::clientThread(void* arg) {
     
     //loop to do task
     while(working) {
-	
+      
 	//get current status of process
 	pthread_mutex_lock(&(m_mainStatusMutex));
 	status = m_currMainThreadStatus;
@@ -261,7 +297,12 @@ void* Controller::clientThread(void* arg) {
 	
 	switch(status) {
 	  case WAIT:
-	    //do nothing, main thread has no status like this.
+	    //change client thread status to idel
+	    pthread_mutex_lock(&(m_clientStatusMutex));
+	    if(m_currClientThreadsStatus[index] == CAL) {
+		m_currClientThreadsStatus[index] = WAIT;
+	    }
+	    pthread_mutex_unlock(&(m_clientStatusMutex));
 	    break;
 	  case END:
 	    working = false;
@@ -279,10 +320,6 @@ void* Controller::clientThread(void* arg) {
 	    //ask client to classify the data.
 	    askClientClassifyData(client);
 	    
-	    //change client thread status to idel
-	    pthread_mutex_lock(&(m_clientStatusMutex));
-	    m_currClientThreadsStatus[index] = WAIT;
-	    pthread_mutex_unlock(&(m_clientStatusMutex));
 	    break;
 	  case NOP:
 	    //There is no status in main thread. Client thread do nothing.
@@ -357,7 +394,7 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	    sendStr<<copyCurrCentroids[i][j]<<'%';
 	}
 	
-	cout<<"Thread-"<<client->getForeignPort()<<"centroids try to send data-"<<i<<endl;
+	//cout<<"Thread-"<<client->getForeignPort()<<"centroids try to send centroids-"<<i<<endl;
 	
 	//send it
 	try {
@@ -377,11 +414,11 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	}
 	
 	if("OK" != strRecv) {
-	    cout<<"client-"<<client->getForeignPort()<<": send current controids data "<<i<<" failed!"<<endl;
+	    cout<<"client-"<<client->getForeignPort()<<": send current controids centroids-"<<i<<" failed!"<<endl;
 	    return false;
 	}
 	
-	cout<<"Thread-"<<client->getForeignPort()<<"centroids data-"<<i<<"has been sent!"<<endl;
+	//cout<<"Thread-"<<client->getForeignPort()<<"centroids centroids-"<<i<<"has been sent!"<<endl;
     }
     cout<<"client-"<<client->getForeignPort()<<": finish to send current centroids task"<<endl;
     
@@ -426,22 +463,43 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	tempCentrooidsDataNum.insert(map< int, int >::value_type(i, 0));
     }
     
+    cout<<"Thread-"<<client->getForeignPort()<<": try to receive the outout data from client!"<<endl;
+    
     //receive new centroids information from clients
     for(int i = 0; i < m_numOfCluster; i++) {
+	//clean buffer
+	delete recvMsg;
+	recvMsg = new char[1024];
+      
+	cout<<"Thread-"<<client->getForeignPort()<<": try to receive number in cluster from client for cluster-"<<i<<endl;
         //receive number of data in new centroids
 	try {
 	    client->recv(recvMsg, 1024);         //receive
 	    strRecv = recvMsg;			  //copy to string type
-	    tempCentrooidsDataNum[i] = atoi(strRecv.c_str());  //convert to int
-	    client->send("OK", 2);		    //feedback
 	} catch(ClassException<Socket> e) {
 	    cout<<"#Error: receive output data from clients failed!"<<endl;
+	    return false;
+	}
+	
+	cout<<"Thread-"<<client->getForeignPort()<<": receive data message: "<<strRecv<<endl;
+	tempCentrooidsDataNum[i] = atoi(strRecv.c_str());  //convert to int 
+	
+	string feedback = "OKOK";
+	
+	try {
+	    //client->send("OK", 2);		    //feedback
+	    client->send(feedback.c_str(), feedback.length());
+	} catch(ClassException<Socket> e) {
+	    cout<<"#Error: send feedback error!"<<endl;
 	    return false;
 	}
 	
 	//clean buffer
 	delete recvMsg;
 	recvMsg = new char[1024];
+	
+	cout<<"Thread-"<<client->getForeignPort()<<": Finished receive number on cluster from client for cluster-"<<i<<endl;
+	cout<<"Thread-"<<client->getForeignPort()<<": Try to receive new centroids message from client for cluster-"<<i<<endl;
 	
 	//receive average new controids
 	try {
@@ -452,6 +510,8 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	    cout<<"#Error: receive output data from clients failed!"<<endl;
 	    return false;
 	}
+	cout<<"Thread-"<<client->getForeignPort()<<": Received message from client is: "<<strRecv<<endl;
+	cout<<"Thread-"<<client->getForeignPort()<<": Finished receive new centroids message from client for cluster-"<<i<<endl;
 	
 	//parse received partly new centroids data, and save into map
 	vector<double> temp;
@@ -459,7 +519,7 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
 	    int index = strRecv.find_first_of('%');     //search
 	    string subStr = strRecv.substr(0, index);   //copy
 	    strRecv.erase(0, index);                    //cut
-	    temp[j] = atof(subStr.c_str());		 //convert and store
+	    temp.push_back( atof(subStr.c_str()) );		 //convert and store
 	}
 	
 	//store into temp map
@@ -467,14 +527,22 @@ bool Controller::askClientClassifyData(TCPSocket *client) {
     }
     
     delete recvMsg;
+    cout<<"Thread-"<<client->getForeignPort()<<": finished to receive output data from client!"<<endl;
     
     //step 4: update new centeroid information
     pthread_mutex_lock(&(m_updateMutex));
     for(int i = 0; i < m_numOfCluster; i++) {
+	vector<double> tempVector;
 	for(int j = 0; j < m_dataDimension; j++) {
-	    m_newCentroids[i][j] = m_newCentroids[i][j] * m_newCentroidsDataNum[i] + tempNewCentroids[i][j] * tempCentrooidsDataNum[i];
+	    double tempValue = m_newCentroids[i][j] * m_newCentroidsDataNum[i] + tempNewCentroids[i][j] * tempCentrooidsDataNum[i];
+	    tempVector.push_back(tempValue);
 	}
+	m_newCentroids[i] = tempVector;
 	m_newCentroidsDataNum[i] += tempCentrooidsDataNum[i];
+    }
+    
+    if(!m_hasNoClassified) {
+	m_hasNoClassified = true;
     }
     pthread_mutex_unlock(&(m_updateMutex));
     
@@ -571,6 +639,7 @@ bool Controller::readDataFromFile() {
 	   tempPoint.push_back( randValue );
 	}
 	m_currCentroids[i] = tempPoint;
+	//m_newCentroids[i] = tempPoint;
     }
     
     //test code: output the current centroids generate in last step
